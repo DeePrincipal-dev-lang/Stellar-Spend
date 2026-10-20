@@ -4,26 +4,17 @@ import {
   authenticateApiKey,
   checkApiKeyRateLimit,
   recordApiKeyUsage,
-} from '@/lib/api-keys/service';
+} from '@/lib/api-keys';
 import type { ApiKeyRecord } from '@/lib/api-keys/types';
-import { getClientIp } from '@/lib/offramp/utils/rate-limiter';
-import { enforceScope } from '@/lib/middleware/scope-enforcement.middleware';
-
-function extractApiKey(request: NextRequest): string | null {
-  const xApiKey = request.headers.get('x-api-key');
-  if (xApiKey) return xApiKey;
-
-  const authorization = request.headers.get('authorization');
-  if (!authorization) return null;
-  const match = authorization.match(/^Bearer\s+(.+)$/i);
-  return match?.[1] ?? null;
-}
+import { getClientIp } from '@/lib/offramp';
+import { enforceScope } from '@/lib/middleware';
+import { extractApiKeyFromRequest } from '@/lib/auth/authorize';
 
 export async function withApiKeyAuth(
   request: NextRequest,
-  handler: (apiKey: ApiKeyRecord) => Promise<NextResponse>
+  handler: (apiKey: ApiKeyRecord) => Promise<NextResponse>,
 ): Promise<NextResponse> {
-  const rawKey = extractApiKey(request);
+  const rawKey = extractApiKeyFromRequest(request);
   if (!rawKey) {
     return ErrorHandler.unauthorized('API key is required');
   }
@@ -44,10 +35,7 @@ export async function withApiKeyAuth(
       ipAddress: getClientIp(request),
     });
 
-    const response = NextResponse.json(
-      { error: 'API key rate limit exceeded' },
-      { status: 429 }
-    );
+    const response = NextResponse.json({ error: 'API key rate limit exceeded' }, { status: 429 });
     if (rateLimit.retryAfter) {
       response.headers.set('Retry-After', String(rateLimit.retryAfter));
     }

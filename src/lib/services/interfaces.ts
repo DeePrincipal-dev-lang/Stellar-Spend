@@ -3,7 +3,7 @@
  * Each interface mirrors the public API of its corresponding service class.
  */
 
-import type { PayoutStatus as CanonicalPayoutStatus } from '@/lib/transaction-status';
+import type { PayoutStatus as CanonicalPayoutStatus } from '@/lib/transactions';
 
 export interface IQuoteService {
   getQuote(request: {
@@ -31,7 +31,10 @@ export interface IBridgeService {
     sourceToken: { symbol: string; decimals: number; contract?: string; chain: string };
     destinationToken: { symbol: string; decimals: number; contract?: string; chain: string };
   }>;
-  submitTransaction(request: { xdr: string; signature: string }): Promise<{ txHash: string; status: string }>;
+  submitTransaction(request: {
+    xdr: string;
+    signature: string;
+  }): Promise<{ txHash: string; status: string }>;
   getTransactionStatus(txHash: string): Promise<{ status: string; bridgeAmount?: string }>;
 }
 

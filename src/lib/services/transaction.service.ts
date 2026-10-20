@@ -1,5 +1,5 @@
-import { dal } from '@/lib/db/dal';
 import type { Transaction } from '@/lib/transaction-storage';
+import type { TransactionStore } from './ports';
 
 export interface TransactionFilter {
   status?: string;
@@ -11,26 +11,27 @@ export interface TransactionFilter {
 }
 
 export class TransactionService {
+  constructor(private readonly store: TransactionStore) {}
+
   async getTransaction(id: string): Promise<Transaction | null> {
     if (!id) {
       throw new Error('Transaction ID is required');
     }
-    return dal.getById(id);
+    return this.store.getById(id);
   }
 
   async getTransactionByPayoutOrderId(orderId: string): Promise<Transaction | null> {
     if (!orderId) {
       throw new Error('Order ID is required');
     }
-    return dal.getByPayoutOrderId(orderId);
+    return this.store.getByPayoutOrderId(orderId);
   }
 
   async listTransactions(filter: TransactionFilter): Promise<Transaction[]> {
-    const limit = Math.min(filter.limit || 50, 100);
-    const offset = filter.offset || 0;
+    // Query logic would go here, applying the supplied filter (status, currency,
+    // date range, limit, offset) to the transaction store
+    void filter;
 
-    // Query logic would go here
-    // This would filter transactions based on criteria
     return [];
   }
 
@@ -43,8 +44,8 @@ export class TransactionService {
       throw new Error('No updates provided');
     }
 
-    await dal.update(id, updates);
-    return dal.getById(id);
+    await this.store.update(id, updates);
+    return this.store.getById(id);
   }
 
   async deleteTransaction(id: string): Promise<boolean> {
@@ -56,7 +57,7 @@ export class TransactionService {
     return true;
   }
 
-  async getTransactionStats(filter?: TransactionFilter): Promise<{
+  async getTransactionStats(_filter?: TransactionFilter): Promise<{
     total: number;
     completed: number;
     failed: number;
@@ -73,4 +74,3 @@ export class TransactionService {
     };
   }
 }
-

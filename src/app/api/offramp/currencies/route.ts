@@ -1,10 +1,11 @@
 import { logger } from '@/lib/logger';
 import { NextResponse } from 'next/server';
 import { env } from '@/lib/env';
-import { ErrorHandler } from '@/lib/error-handler';
-import { withPaycrestTimeout } from '@/lib/offramp/utils/timeout';
+import { ErrorHandler, ApiError } from '@/lib/error-handler';
+import { withPaycrestTimeout } from '@/lib/offramp';
 import { getActiveCurrencies, isSupportedCurrency, validateCurrencyAmount } from '@/lib/currencies';
 import { getCurrencyFlag } from '@/lib/currency-flags';
+import { paycrestBreaker } from '@/lib/circuit-breaker';
 
 export const maxDuration = 10;
 
@@ -26,42 +27,47 @@ class PaycrestAdapter {
   }
 
   async getCurrencies(): Promise<Currency[]> {
-    const response = await withPaycrestTimeout(
-      fetch(`${this.apiUrl}/currencies`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'API-Key': this.apiKey,
-        },
-      }),
-      'get_currencies'
+    const response = await paycrestBreaker.execute(() =>
+      withPaycrestTimeout(
+        fetch(`${this.apiUrl}/currencies`, {
+          headers: {
+            'Content-Type': 'application/json',
+            'API-Key': this.apiKey,
+          },
+        }),
+        'get_currencies',
+      ),
     );
 
     if (!response.ok) {
       throw new Error(`Failed to fetch currencies: ${response.status}`);
     }
 
-    const data = await response.json();
+    const data = (await response.json()) as
+      | Array<Record<string, unknown>>
+      | { currencies?: Array<Record<string, unknown>> };
+
+    const mapCurrency = (c: Record<string, unknown>) => ({
+      code: (c.code as string) || (c.currency as string) || '',
+      name: (c.name as string) || '',
+      symbol: (c.symbol as string) || '',
+    });
 
     const currencies = Array.isArray(data)
-      ? data.map((c: any) => ({
-        code: c.code || c.currency || '',
-        name: c.name || '',
-        symbol: c.symbol || '',
-      }))
-      : data.currencies?.map((c: any) => ({
-        code: c.code || c.currency || '',
-        name: c.name || '',
-        symbol: c.symbol || '',
-      })) || [];
+      ? data.map(mapCurrency)
+      : (data.currencies?.map(mapCurrency) ?? []);
 
     return currencies;
   }
 }
 
-// In-memory cache for currencies
+// In-memory cache for currencies (server-process level)
 let cachedCurrencies: Currency[] | null = null;
 let cacheTimestamp: number = 0;
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const CACHE_DURATION = 60 * 60 * 1000; // 1 hour in-process cache
+
+// Edge / CDN cache: 1 hour fresh + 24 hours stale-while-revalidate
+const CACHE_CONTROL_HEADER = 'public, max-age=3600, stale-while-revalidate=86400';
 
 /**
  * Merges Paycrest currencies with local config to enrich with flags and limits.
@@ -71,7 +77,6 @@ function enrichCurrencies(remote: Currency[]): Currency[] {
   const active = getActiveCurrencies();
   const activeCodes = new Set(active.map((c) => c.code));
 
-  // Start with remote currencies that are in our active list
   const enriched = remote
     .filter((c) => activeCodes.has(c.code.toUpperCase()))
     .map((c) => {
@@ -84,7 +89,6 @@ function enrichCurrencies(remote: Currency[]): Currency[] {
       };
     });
 
-  // Add any active local currencies not returned by remote
   const remoteCodes = new Set(remote.map((c) => c.code.toUpperCase()));
   for (const local of active) {
     if (!remoteCodes.has(local.code)) {
@@ -107,7 +111,7 @@ function enrichCurrencies(remote: Currency[]): Currency[] {
  *
  * Fetches supported fiat currencies. Tries Paycrest API first, falls back to
  * local config. Enriches with flags and amount limits.
- * Caches result for 5 minutes.
+ * Caches result for 1 hour.
  *
  * Query params:
  *   ?validate=<code>&amount=<number> — validate a currency/amount combination
@@ -115,28 +119,26 @@ function enrichCurrencies(remote: Currency[]): Currency[] {
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
 
-  // Currency/amount validation endpoint
   const validateCode = searchParams.get('validate');
   if (validateCode) {
     const amountStr = searchParams.get('amount');
     if (!isSupportedCurrency(validateCode)) {
-      return NextResponse.json({ valid: false, error: `Unsupported currency: ${validateCode}` });
+      return ErrorHandler.validation(`Unsupported currency: ${validateCode}`);
     }
     if (amountStr) {
       const amount = parseFloat(amountStr);
       const error = validateCurrencyAmount(validateCode, amount);
-      if (error) return NextResponse.json({ valid: false, error });
+      if (error) return ErrorHandler.validation(error);
     }
     return NextResponse.json({ valid: true });
   }
 
   try {
-    // Check cache
     const now = Date.now();
     if (cachedCurrencies && now - cacheTimestamp < CACHE_DURATION) {
       return NextResponse.json(
         { data: cachedCurrencies },
-        { headers: { 'Cache-Control': 'public, max-age=300' } }
+        { headers: { 'Cache-Control': CACHE_CONTROL_HEADER } },
       );
     }
 
@@ -146,7 +148,6 @@ export async function GET(request: Request) {
       const remote = await paycrest.getCurrencies();
       currencies = enrichCurrencies(remote);
     } catch {
-      // Fallback to local config
       currencies = getActiveCurrencies().map((c) => ({
         code: c.code,
         name: c.name,
@@ -162,10 +163,10 @@ export async function GET(request: Request) {
 
     return NextResponse.json(
       { data: currencies },
-      { headers: { 'Cache-Control': 'public, max-age=300' } }
+      { headers: { 'Cache-Control': CACHE_CONTROL_HEADER } },
     );
   } catch (error) {
-    logger.error('Error fetching currencies:', {}, error);
+    logger.error('offramp.currencies.error', {}, error);
     return ErrorHandler.handle(error);
   }
 }
