@@ -1,8 +1,9 @@
 //! Admin operations and circuit breaker for the fee-manager contract (issue #984).
 
-use soroban_sdk::{symbol_short, Address, BytesN, Env, String};
+use soroban_sdk::{Address, BytesN, Env, String};
 use stellar_spend_shared::{
     errors::ContractError,
+    events::{emit_admin_initialized, emit_contract_paused, emit_contract_unpaused, emit_contract_migrated},
     validation::{check_schema_version, require_basis_points, require_string_len},
 };
 
@@ -99,7 +100,7 @@ impl Admin {
         storage.set(&DataKey::Schema, &SCHEMA_VERSION);
         bump_instance_ttl(&env);
 
-        env.events().publish((symbol_short!("init"),), admin);
+        emit_admin_initialized(&env, admin.clone());
         Ok(())
     }
 
@@ -118,7 +119,7 @@ impl Admin {
 
         env.storage().instance().set(&DataKey::Paused, &true);
         bump_instance_ttl(&env);
-        env.events().publish((symbol_short!("pause"),), reason);
+        emit_contract_paused(&env, cache.admin(&env)?, reason);
         Ok(())
     }
 
@@ -133,7 +134,7 @@ impl Admin {
 
         env.storage().instance().set(&DataKey::Paused, &false);
         bump_instance_ttl(&env);
-        env.events().publish((symbol_short!("unpause"),), ());
+        emit_contract_unpaused(&env, cache.admin(&env)?);
         Ok(())
     }
 
@@ -171,7 +172,7 @@ pub fn init(env: Env, admin: Address, default_fee_bp: u32) -> Result<(), Contrac
     storage.set(&DataKey::Schema, &SCHEMA_VERSION);
     bump_instance_ttl(&env);
 
-    env.events().publish((symbol_short!("init"),), admin);
+    emit_admin_initialized(&env, admin.clone());
     Ok(())
 }
 
@@ -190,7 +191,7 @@ pub fn pause(env: Env, reason: String) -> Result<(), ContractError> {
 
     env.storage().instance().set(&DataKey::Paused, &true);
     bump_instance_ttl(&env);
-    env.events().publish((symbol_short!("pause"),), reason);
+    emit_contract_paused(&env, cache.admin(&env)?, reason);
     Ok(())
 }
 
@@ -205,7 +206,7 @@ pub fn unpause(env: Env) -> Result<(), ContractError> {
 
     env.storage().instance().set(&DataKey::Paused, &false);
     bump_instance_ttl(&env);
-    env.events().publish((symbol_short!("unpause"),), ());
+    emit_contract_unpaused(&env, cache.admin(&env)?);
     Ok(())
 }
 
@@ -234,7 +235,7 @@ pub fn set_default_rate(env: Env, fee_bp: u32) -> Result<(), ContractError> {
 
     env.storage().instance().set(&DataKey::DefaultRate, &fee_bp);
     bump_instance_ttl(&env);
-    env.events().publish((symbol_short!("rate"),), fee_bp);
+    env.events().publish((soroban_sdk::symbol_short!("rate"),), fee_bp);
     Ok(())
 }
 
@@ -251,7 +252,8 @@ pub fn schema_version(env: Env) -> Result<u32, ContractError> {
 pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) -> Result<(), ContractError> {
     require_admin(&env)?;
     env.deployer().update_current_contract_wasm(new_wasm_hash);
-    env.events().publish((symbol_short!("upgrade"),), ());
+    // Upgrade event emitted (no need to include hash in event)
+    env.events().publish((soroban_sdk::symbol_short!("upgrade"),), ());
     Ok(())
 }
 
@@ -284,8 +286,7 @@ pub fn migrate(env: Env) -> Result<u32, ContractError> {
         .instance()
         .set(&DataKey::Schema, &SCHEMA_VERSION);
     bump_instance_ttl(&env);
-    env.events()
-        .publish((symbol_short!("migrate"),), (stored, SCHEMA_VERSION));
+    emit_contract_migrated(&env, stored, SCHEMA_VERSION);
     Ok(stored)
 }
 
