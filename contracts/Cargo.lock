@@ -606,6 +606,7 @@ name = "fee-manager"
 version = "1.0.0"
 dependencies = [
  "fee-manager",
+ "proptest",
  "soroban-sdk",
  "stellar-spend-shared",
 ]
