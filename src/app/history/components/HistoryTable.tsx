@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { memo, useCallback, useRef, useState } from 'react';
 import type { Transaction } from '@/lib/transaction-storage';
 import type { SortDir, SortField } from '../filters';
 import { HistoryRow } from './HistoryRow';
@@ -20,6 +20,51 @@ interface HistoryTableProps {
 
 const headerClass =
   'px-5 py-2.5 text-left text-[10px] tracking-[0.18em] font-semibold text-[#0a0a0a] uppercase whitespace-nowrap';
+
+interface HistoryTableRowProps {
+  tx: Transaction;
+  index: number;
+  isFocused: boolean;
+  registerRowRef: (el: HTMLTableRowElement | null, index: number) => void;
+  setRovingIndex: (index: number) => void;
+  handleRowKeyDown: (e: React.KeyboardEvent<HTMLTableRowElement>, index: number) => void;
+  onSaveNote: (id: string, note: string) => void;
+  onFileClaim: (tx: Transaction) => void;
+}
+
+const HistoryTableRow = memo(function HistoryTableRow({
+  tx,
+  index,
+  isFocused,
+  registerRowRef,
+  setRovingIndex,
+  handleRowKeyDown,
+  onSaveNote,
+  onFileClaim,
+}: HistoryTableRowProps) {
+  const rowRef = useCallback(
+    (el: HTMLTableRowElement | null) => registerRowRef(el, index),
+    [index, registerRowRef],
+  );
+  const onRowFocus = useCallback(() => setRovingIndex(index), [index, setRovingIndex]);
+  const onKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTableRowElement>) => handleRowKeyDown(e, index),
+    [handleRowKeyDown, index],
+  );
+
+  return (
+    <HistoryRow
+      tx={tx}
+      index={index}
+      isFocused={isFocused}
+      rowRef={rowRef}
+      onRowFocus={onRowFocus}
+      onRowKeyDown={onKeyDown}
+      onSaveNote={onSaveNote}
+      onFileClaim={onFileClaim}
+    />
+  );
+});
 
 /**
  * Presentational, sortable transaction history table.
@@ -135,30 +180,19 @@ export function HistoryTable({
           </tr>
         </thead>
         <tbody>
-          <VirtualizedList
-            items={rows}
-            scrollContainerRef={scrollContainerRef}
-            itemHeight={ROW_HEIGHT}
-            viewportHeight={VIRTUALIZED_VIEWPORT_HEIGHT}
-            renderItem={(tx, index) => (
-              <HistoryRow
-                key={tx.id}
-                tx={tx}
-                index={index}
-                isFocused={index === rovingIndex}
-                rowRef={(el) => registerRowRef(el, index)}
-                onRowFocus={() => setRovingIndex(index)}
-                onRowKeyDown={(e) => handleRowKeyDown(e, index)}
-                onSaveNote={onSaveNote}
-                onFileClaim={onFileClaim}
-              />
-            )}
-            renderSpacer={(height) => (
-              <tr aria-hidden="true" className="pointer-events-none">
-                <td colSpan={8} style={{ height, padding: 0, border: 0 }} />
-              </tr>
-            )}
-          />
+          {rows.map((tx, i) => (
+            <HistoryTableRow
+              key={tx.id}
+              tx={tx}
+              index={i}
+              isFocused={i === rovingIndex}
+              registerRowRef={registerRowRef}
+              setRovingIndex={setRovingIndex}
+              handleRowKeyDown={handleRowKeyDown}
+              onSaveNote={onSaveNote}
+              onFileClaim={onFileClaim}
+            />
+          ))}
         </tbody>
       </table>
     </div>

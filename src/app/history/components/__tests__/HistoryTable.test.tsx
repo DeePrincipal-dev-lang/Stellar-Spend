@@ -3,6 +3,15 @@ import { render, screen, fireEvent, within } from '@testing-library/react';
 import { HistoryTable } from '../HistoryTable';
 import type { Transaction } from '@/lib/transaction-storage';
 
+const renderCounts = vi.hoisted(() => ({ statusBadge: 0 }));
+
+vi.mock('@/components/StatusBadge', () => ({
+  StatusBadge: ({ status }: { status: string }) => {
+    renderCounts.statusBadge += 1;
+    return <span>{status}</span>;
+  },
+}));
+
 const tx = (o: Partial<Transaction> = {}): Transaction => ({
   id: 'tx-1',
   timestamp: 1_700_000_000_000,
@@ -40,26 +49,24 @@ describe('HistoryTable', () => {
     expect(screen.getByText('Access Bank')).toBeInTheDocument();
   });
 
-  it('windows transaction rows when the list exceeds 100 items', () => {
-    setup(Array.from({ length: 150 }, (_, index) => tx({ id: `tx-${index}` })));
+  it('does not rerender unchanged rows when table props change', () => {
+    const rows = Array.from({ length: 500 }, (_, index) => tx({ id: `tx-${index}` }));
+    const props = {
+      rows,
+      sortField: 'timestamp' as const,
+      sortDir: 'desc' as const,
+      onToggleSort: vi.fn(),
+      onSaveNote: vi.fn(),
+      onFileClaim: vi.fn(),
+    };
+    renderCounts.statusBadge = 0;
+    const { rerender } = render(<HistoryTable {...props} />);
 
-    expect(screen.getAllByTestId('transaction-entry').length).toBeLessThan(100);
-    expect(screen.getAllByTestId('transaction-entry')[0]).toHaveAttribute('tabindex', '0');
-  });
+    expect(renderCounts.statusBadge).toBe(500);
 
-  it('keeps ArrowDown focus moving when the next row is not mounted', () => {
-    setup(Array.from({ length: 150 }, (_, index) => tx({ id: `tx-${index}` })));
+    rerender(<HistoryTable {...props} sortDir="asc" />);
 
-    screen.getAllByTestId('transaction-entry')[0].focus();
-    for (let index = 0; index < 16; index++) {
-      fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' });
-    }
-    fireEvent.scroll(screen.getByRole('table').parentElement!);
-
-    const targetRow = screen
-      .getAllByTestId('transaction-entry')
-      .find((row) => row.getAttribute('data-row-index') === '16');
-    expect(targetRow).toHaveFocus();
+    expect(renderCounts.statusBadge).toBe(500);
   });
 
   it('calls onToggleSort when a sortable header is clicked', () => {

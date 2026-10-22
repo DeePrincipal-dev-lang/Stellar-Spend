@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import type { Transaction } from '@/lib/transaction-storage';
 import { CopyButton } from '@/components/CopyButton';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -21,7 +22,7 @@ interface HistoryRowProps {
 }
 
 /** A single transaction row in the history table. */
-export function HistoryRow({
+export const HistoryRow = memo(function HistoryRow({
   tx,
   index,
   isFocused,
@@ -94,4 +95,4 @@ export function HistoryRow({
       </td>
     </tr>
   );
-}
+});
