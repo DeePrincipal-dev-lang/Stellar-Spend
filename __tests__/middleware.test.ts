@@ -1,31 +1,31 @@
 import { describe, it, expect, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
 
-vi.mock('./src/lib/performance', () => ({ recordApiTiming: vi.fn() }));
-vi.mock('./src/lib/logger', () => ({
+vi.mock('../src/lib/performance', () => ({ recordApiTiming: vi.fn() }));
+vi.mock('../src/lib/logger', () => ({
   logger: { withContext: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }) },
 }));
-vi.mock('./src/lib/security/headers', () => ({
+vi.mock('../src/lib/security/headers', () => ({
   addSecurityHeaders: (res: any) => {
     res.headers.set('x-security', 'applied');
     return res;
   },
 }));
-vi.mock('./src/lib/middleware/geo', () => ({
+vi.mock('../src/lib/middleware/geo', () => ({
   geoMiddleware: vi.fn(() => null),
   attachGeoHeaders: (res: any) => res,
 }));
-vi.mock('./src/lib/middleware/auth', () => ({
+vi.mock('../src/lib/middleware/auth', () => ({
   authMiddleware: vi.fn(() => null),
 }));
-vi.mock('./src/lib/middleware/public-api-rate-limit.middleware', () => ({
+vi.mock('../src/lib/middleware/public-api-rate-limit.middleware', () => ({
   publicApiRateLimitMiddleware: vi.fn(() => Promise.resolve(null)),
   addRateLimitHeaders: (res: any) => res,
 }));
 
-import { middleware } from './middleware';
-import { geoMiddleware } from './src/lib/middleware/geo';
-import { authMiddleware } from './src/lib/middleware/auth';
+import { middleware } from '../middleware';
+import { geoMiddleware } from '../src/lib/middleware/geo';
+import { authMiddleware } from '../src/lib/middleware/auth';
 
 function makeRequest(path: string, headers: Record<string, string> = {}) {
   return new NextRequest(`http://localhost${path}`, { headers: new Headers(headers) });
