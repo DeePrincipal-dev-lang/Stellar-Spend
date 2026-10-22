@@ -40,6 +40,28 @@ describe('HistoryTable', () => {
     expect(screen.getByText('Access Bank')).toBeInTheDocument();
   });
 
+  it('windows transaction rows when the list exceeds 100 items', () => {
+    setup(Array.from({ length: 150 }, (_, index) => tx({ id: `tx-${index}` })));
+
+    expect(screen.getAllByTestId('transaction-entry').length).toBeLessThan(100);
+    expect(screen.getAllByTestId('transaction-entry')[0]).toHaveAttribute('tabindex', '0');
+  });
+
+  it('keeps ArrowDown focus moving when the next row is not mounted', () => {
+    setup(Array.from({ length: 150 }, (_, index) => tx({ id: `tx-${index}` })));
+
+    screen.getAllByTestId('transaction-entry')[0].focus();
+    for (let index = 0; index < 16; index++) {
+      fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' });
+    }
+    fireEvent.scroll(screen.getByRole('table').parentElement!);
+
+    const targetRow = screen
+      .getAllByTestId('transaction-entry')
+      .find((row) => row.getAttribute('data-row-index') === '16');
+    expect(targetRow).toHaveFocus();
+  });
+
   it('calls onToggleSort when a sortable header is clicked', () => {
     const { onToggleSort } = setup([tx()]);
     fireEvent.click(screen.getByText(/AMOUNT/));
