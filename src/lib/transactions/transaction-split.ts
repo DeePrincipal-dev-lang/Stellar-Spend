@@ -1,3 +1,4 @@
+import { randomHex } from "@/lib/crypto/ids";
 /**
  * Transaction splitting — split a single USDC amount across multiple beneficiaries.
  * All amounts are in USDC (string decimals). Percentages must sum to 100.
@@ -127,8 +128,8 @@ export class SplitStorage {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
   }
 
-  static generateId(): string {
-    return `split_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    return `split_${Date.now()}_${randomHex(4)}`;
+    return `split_${Date.now()}_${randomHex(4)}`;
   }
 
   static getById(splitId: string): SplitTransaction | undefined {

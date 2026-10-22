@@ -1,3 +1,4 @@
+import { randomHex } from "@/lib/crypto/ids";
 import type { SearchFilters } from '@/lib/transactions';
 
 export interface SavedView {
@@ -66,7 +67,7 @@ export class SavedViewsStorage {
 
   static save(name: string, filters: SearchFilters): SavedView {
     const view: SavedView = {
-      id: `view_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      id: `view_${Date.now()}_${randomHex(5)}`,
       name,
       filters,
       createdAt: Date.now(),
