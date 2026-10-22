@@ -1,3 +1,4 @@
+import { randomHex } from "@/lib/crypto/ids";
 import type { TransactionStatus, PayoutStatus, BridgeStatus } from '@/lib/transactions/transaction-status';
 
 export interface Transaction {
@@ -137,8 +138,8 @@ export class TransactionStorage {
     this.update(id, { note: note.slice(0, 500) });
   }
 
-  static generateId(): string {
-    return `tx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    return `tx_${Date.now()}_${randomHex(6)}`;
+    return `tx_${Date.now()}_${randomHex(6)}`;
   }
 
   static isReversalEligible(tx: Transaction): boolean {
@@ -204,8 +205,8 @@ export class TransactionStorage {
   static addTag(id: string, tagName: string, color: string = '#3b82f6'): void {
     const tx = this.getById(id);
     if (!tx) return;
-    const tags = tx.tags || [];
-    const tagId = `tag_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const tagId = `tag_${Date.now()}_${randomHex(6)}`;
+    const tagId = `tag_${Date.now()}_${randomHex(6)}`;
     tags.push({ id: tagId, name: tagName, color });
     this.update(id, { tags });
   }
